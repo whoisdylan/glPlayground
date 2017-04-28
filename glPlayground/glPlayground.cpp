@@ -33,17 +33,23 @@ int main() {
 	glewExperimental = GL_TRUE;
 	glewInit();
 
-	glClearColor(1.0, 0.0, 0.0, 1.0);
+	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+	glFrontFace(GL_CW);
 
 	// create vertex shader
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	GLchar *vertexShaderSource =
-		"#version 330 core\n\
+		"#version 450 core\n\
     \n\
     layout (location = 0) in vec3 position;\n\
+    layout (location = 1) in vec3 color;\n\
+		out vec3 vertexColor;\n\
     \n\
     void main() {\n\
       gl_Position = vec4(position.x, position.y, position.z, 1.0);\n\
+			vertexColor = color;\n\
     }";
 	glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
 	glCompileShader(vertexShader);
@@ -59,12 +65,13 @@ int main() {
 	// create fragment shader
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	GLchar *fragmentShaderSource =
-		"#version 330 core\n\
+		"#version 450 core\n\
     \n\
+		in vec3 vertexColor;\n\
     out vec4 color;\n\
     \n\
     void main() {\n\
-      color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
+      color = vec4(vertexColor, 1.0);\n\
     }";
 	glShaderSource(fragmentShader, 1, &fragmentShaderSource, nullptr);
 	glCompileShader(fragmentShader);
@@ -94,44 +101,61 @@ int main() {
 	GLfloat vertices[] = {
 		-0.5, -0.5, 0,
 		0, 0.5, 0,
-		0.5, -0.5, 0
+		0.5, -0.5, 0,
+		1.0, 0.5, 0
+	};
+
+	GLfloat colors[] = {
+		1.0, 0.0, 0.0,
+		0.0, 1.0, 0.0,
+		0.0, 0.0, 1.0,
+		1.0, 0.0, 1.0
 	};
 
 	GLuint indices[] = {
-		0, 1, 2
+		0, 1, 2,
+		1, 3, 2
 	};
 
-	// create vertex array object to store all gl state for drawing an object
+	// create vertex array object to store all gl state for drawing
 	GLuint vao;
 	//glCreateVertexArrays(1, &vao);
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
 
-	GLuint vbo;
-	//glCreateBuffers(1, &vbo);
-	glGenBuffers(1, &vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	// create vbo
+	GLuint vboVertices;
+	glGenBuffers(1, &vboVertices);
+	glBindBuffer(GL_ARRAY_BUFFER, vboVertices);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid *) 0);
+	glEnableVertexAttribArray(0);
 
+	// create vbo for triangle colors
+	GLuint vboColors;
+	glGenBuffers(1, &vboColors);
+	glBindBuffer(GL_ARRAY_BUFFER, vboColors);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid *) 0);
+	glEnableVertexAttribArray(1);
+
+	// create index ebo for the mesh
 	GLuint ebo;
-	glCreateBuffers(1, &ebo);
+	//glCreateBuffers(1, &ebo);
 	glGenBuffers(1, &ebo);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-	glVertexAttribPointer(0, sizeof(vertices) / sizeof(GLfloat) / 3, GL_FLOAT, GL_FALSE, 0, (GLvoid *) 0);
-	glEnableVertexAttribArray(0);
-
-	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glBindVertexArray(0); //unbind vao
+	glBindBuffer(GL_ARRAY_BUFFER, 0); //unbind vboColors
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0); //unbind ebo
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetWindowShouldClose(window, GLFW_TRUE);
 		}
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glUseProgram(program);
 		glBindVertexArray(vao);
 		glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, nullptr);
@@ -141,7 +165,8 @@ int main() {
 	}
 
 	glDeleteBuffers(1, &ebo);
-	glDeleteBuffers(1, &vbo);
+	glDeleteBuffers(1, &vboVertices);
+	glDeleteBuffers(1, &vboColors);
 	glDeleteVertexArrays(1, &vao);
 	glfwTerminate();
 	return 0;
