@@ -10,6 +10,10 @@
 #include <string>
 #include <thread>
 
+#include <glm.hpp>
+#include <gtc/matrix_transform.hpp>
+#include <gtc/type_ptr.hpp>
+
 using std::string;
 
 void initWindow(GLFWwindow *&window) {
@@ -33,7 +37,7 @@ int main() {
 	glewExperimental = GL_TRUE;
 	glewInit();
 
-	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glClearColor(0.75, 0.75, 0.75, 1.0);
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
 	glFrontFace(GL_CW);
@@ -45,10 +49,13 @@ int main() {
     \n\
     layout (location = 0) in vec3 position;\n\
     layout (location = 1) in vec3 color;\n\
+		\n\
+		uniform mat4 transform;\n\
+		\n\
 		out vec3 vertexColor;\n\
     \n\
     void main() {\n\
-      gl_Position = vec4(position.x, position.y, position.z, 1.0);\n\
+      gl_Position = transform*vec4(position, 1.0);\n\
 			vertexColor = color;\n\
     }";
 	glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
@@ -99,10 +106,10 @@ int main() {
 	}
 
 	GLfloat vertices[] = {
-		-0.5, -0.5, 0,
-		0, 0.5, 0,
-		0.5, -0.5, 0,
-		1.0, 0.5, 0
+		-0.5, -0.5, 0.375,
+		0, 0.5, 0.0,
+		0.5, -0.5, 0.375,
+		0, -0.5, -0.625
 	};
 
 	GLfloat colors[] = {
@@ -114,7 +121,8 @@ int main() {
 
 	GLuint indices[] = {
 		0, 1, 2,
-		1, 3, 2
+		2, 1, 3,
+		3, 1, 0
 	};
 
 	// create vertex array object to store all gl state for drawing
@@ -150,14 +158,23 @@ int main() {
 	glBindBuffer(GL_ARRAY_BUFFER, 0); //unbind vboColors
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0); //unbind ebo
 
+	const GLint transformUniLoc = glGetUniformLocation(program, "transform");
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetWindowShouldClose(window, GLFW_TRUE);
 		}
+
+		glm::mat4 transform;
+		const double now = glfwGetTime();
+		const float rotAngle = sin(now/100.0) * (180.0 / 3.141592);
+		transform = glm::rotate(transform, rotAngle, glm::vec3(0.0, 1.0, 0.0));
+
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glUseProgram(program);
 		glBindVertexArray(vao);
+		glUniformMatrix4fv(transformUniLoc, 1, GL_FALSE, glm::value_ptr(transform));
 		glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, nullptr);
 		glBindVertexArray(0);
 		glfwSwapBuffers(window);
