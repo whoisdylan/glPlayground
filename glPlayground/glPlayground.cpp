@@ -16,7 +16,7 @@
 
 using std::string;
 
-void initWindow(GLFWwindow *&window) {
+void initWindow(GLFWwindow *&window, int width, int height) {
 	glfwInit();
 	//request a core opengl context
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -25,14 +25,16 @@ void initWindow(GLFWwindow *&window) {
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
-	window = glfwCreateWindow(800, 600, "glPlayground", nullptr, nullptr);
+	window = glfwCreateWindow(width, height, "glPlayground", nullptr, nullptr);
 	glfwMakeContextCurrent(window);
 }
 
 int main() {
 	// init glfw/glew
+	const int windowWidth = 800;
+	const int windowHeight = 600;
 	GLFWwindow *window;
-	initWindow(window);
+	initWindow(window, windowWidth, windowHeight);
 	//init glew with modern opengl
 	glewExperimental = GL_TRUE;
 	glewInit();
@@ -49,14 +51,16 @@ int main() {
     \n\
     layout (location = 0) in vec3 position;\n\
     layout (location = 1) in vec3 color;\n\
-		\n\
-		uniform mat4 transform;\n\
-		\n\
-		out vec3 vertexColor;\n\
+	\n\
+	uniform mat4 tModelToWorld;\n\
+	uniform mat4 tWorldToView;\n\
+	uniform mat4 tViewToClip;\n\
+	\n\
+	out vec3 vertexColor;\n\
     \n\
     void main() {\n\
-      gl_Position = transform*vec4(position, 1.0);\n\
-			vertexColor = color;\n\
+		gl_Position = tViewToClip * tWorldToView * tModelToWorld * vec4(position, 1.0);\n\
+		vertexColor = color;\n\
     }";
 	glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
 	glCompileShader(vertexShader);
@@ -158,7 +162,23 @@ int main() {
 	glBindBuffer(GL_ARRAY_BUFFER, 0); //unbind vboColors
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0); //unbind ebo
 
-	const GLint transformUniLoc = glGetUniformLocation(program, "transform");
+	// create view and project matrices
+	glUseProgram(program); // bind shader program
+
+	const GLint tModelToWorldULoc = glGetUniformLocation(program, "tModelToWorld");
+	const GLint tWorldToViewULoc = glGetUniformLocation(program, "tWorldToView");
+	const GLint tViewToClipULoc = glGetUniformLocation(program, "tViewToClip");
+
+	// create camera view matrix
+	glm::mat4 tWorldToView;
+	tWorldToView = glm::translate(tWorldToView, glm::vec3(0.0, 0.0, -3.0));
+	glUniformMatrix4fv(tWorldToViewULoc, 1, GL_FALSE, glm::value_ptr(tWorldToView));
+
+	// create view frustum (projection) matrix
+	const glm::mat4 tViewToClip = glm::perspective(glm::radians(45.0f), (float) windowWidth / (float) windowHeight, 0.1f, 100.0f);
+	glUniformMatrix4fv(tViewToClipULoc, 1, GL_FALSE, glm::value_ptr(tViewToClip));
+
+	glUseProgram(0); // unbind shader program
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -166,15 +186,16 @@ int main() {
 			glfwSetWindowShouldClose(window, GLFW_TRUE);
 		}
 
-		glm::mat4 transform;
+		glm::mat4 tModelToWorld;
 		const double now = glfwGetTime();
-		const float rotAngle = sin(now/100.0) * (180.0 / 3.141592);
-		transform = glm::rotate(transform, rotAngle, glm::vec3(0.0, 1.0, 0.0));
+		const float rotAngle = sin(now);
+		tModelToWorld = glm::translate(tModelToWorld, glm::vec3(sin(now), 0.0, 0.0));
+		tModelToWorld = glm::rotate(tModelToWorld, rotAngle, glm::vec3(0.0, 1.0, 0.0));
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glUseProgram(program);
 		glBindVertexArray(vao);
-		glUniformMatrix4fv(transformUniLoc, 1, GL_FALSE, glm::value_ptr(transform));
+		glUniformMatrix4fv(tModelToWorldULoc, 1, GL_FALSE, glm::value_ptr(tModelToWorld));
 		glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, nullptr);
 		glBindVertexArray(0);
 		glfwSwapBuffers(window);
