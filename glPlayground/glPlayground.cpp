@@ -30,6 +30,11 @@ void initWindow(GLFWwindow *&window, int width, int height) {
 }
 
 int main() {
+	const double updateRate = 60.0l;
+	const double updateTimestep = 1.0l / updateRate;
+	const float cameraSpeed = 0.5l;
+	const double mouseSensitivity = 0.05l;
+
 	// init glfw/glew
 	const int windowWidth = 800;
 	const int windowHeight = 600;
@@ -126,7 +131,8 @@ int main() {
 	GLuint indices[] = {
 		0, 1, 2,
 		2, 1, 3,
-		3, 1, 0
+		3, 1, 0,
+		0, 2, 3
 	};
 
 	// create vertex array object to store all gl state for drawing
@@ -169,10 +175,10 @@ int main() {
 	const GLint tWorldToViewULoc = glGetUniformLocation(program, "tWorldToView");
 	const GLint tViewToClipULoc = glGetUniformLocation(program, "tViewToClip");
 
-	// create camera view matrix
-	glm::mat4 tWorldToView;
-	tWorldToView = glm::translate(tWorldToView, glm::vec3(0.0, 0.0, -3.0));
-	glUniformMatrix4fv(tWorldToViewULoc, 1, GL_FALSE, glm::value_ptr(tWorldToView));
+	// init camera position
+	glm::vec3 cameraPosition = { 0.0, 0.0, 3.0 };
+	glm::vec3 cameraForward = { 0.0, 0.0, -1.0 };
+	glm::vec3 cameraUp = { 0.0, 1.0, 0.0 };
 
 	// create view frustum (projection) matrix
 	const glm::mat4 tViewToClip = glm::perspective(glm::radians(45.0f), (float) windowWidth / (float) windowHeight, 0.1f, 100.0f);
@@ -180,16 +186,71 @@ int main() {
 
 	glUseProgram(0); // unbind shader program
 
+	double lagTime = 0.0l;
+	double previousTs = glfwGetTime();
+	double prevCursorPosX = 0.0l, prevCursorPosY = 0.0l;
+	double cameraYaw = 0.0l, cameraPitch = 0.0l;
+	glfwGetCursorPos(window, &prevCursorPosX, &prevCursorPosY);
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetWindowShouldClose(window, GLFW_TRUE);
 		}
 
+		// handle camera movement
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+			cameraPosition += cameraForward * cameraSpeed;
+		}
+		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+			cameraPosition -= cameraForward * cameraSpeed;
+		}
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+			cameraPosition += glm::normalize(glm::cross(cameraForward, cameraUp)) * cameraSpeed;
+		}
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+			cameraPosition -= glm::normalize(glm::cross(cameraForward, cameraUp)) * cameraSpeed;
+		}
+
+		// handle camera looking
+		double currCursorPosX = 0.0l, currCursorPosY = 0.0l;
+		glfwGetCursorPos(window, &currCursorPosX, &currCursorPosY);
+		const double cursorOffsetX = (currCursorPosX - prevCursorPosX) * mouseSensitivity;
+		const double cursorOffsetY = (currCursorPosY - prevCursorPosY) * mouseSensitivity;
+		cameraYaw += cursorOffsetX;
+		cameraPitch += cursorOffsetY;
+		const double yawRad = glm::radians(cameraYaw);
+		const double pitchRad = glm::radians(cameraPitch);
+		cameraForward.x = cos(yawRad) * cos(pitchRad);
+		cameraForward.y = sin(pitchRad);
+		cameraForward.z = sin(yawRad) * cos(pitchRad);
+		cameraForward = glm::normalize(cameraForward);
+
+		const double currentTs = glfwGetTime();
+		lagTime += currentTs - previousTs;
+		previousTs = currentTs;
+
+		/*
+		while (lagTime >= updateTimestep) {
+			// update simulation state lagTime/updateTimestep times
+			updateState(updateTimestep);
+			lagTime -= updateTimestep;
+		}
+
+		// render frame with interpolation value to smooth animation
+		render(lagTime/updateTimeStep);
+		*/
+
+		const float radius = 10.0;
+		// create camera view matrix
+		//glm::mat4 tWorldToView = glm::lookAt(glm::vec3(sin(currentTs)*radius, 0, cos(currentTs)*radius), cameraPosition - cameraForward, { 0.0, 1.0, 0.0 });
+		glm::mat4 tWorldToView = glm::lookAt(cameraPosition, cameraPosition + cameraForward, cameraUp);
+		//tWorldToView = glm::translate(tWorldToView, glm::vec3(0.0, 0.0, -3.0));
+		glUniformMatrix4fv(tWorldToViewULoc, 1, GL_FALSE, glm::value_ptr(tWorldToView));
+
+		// create model to world matrix
 		glm::mat4 tModelToWorld;
-		const double now = glfwGetTime();
-		const float rotAngle = sin(now);
-		tModelToWorld = glm::translate(tModelToWorld, glm::vec3(sin(now), 0.0, 0.0));
+		const float rotAngle = sin(currentTs);
+		tModelToWorld = glm::translate(tModelToWorld, glm::vec3(sin(currentTs), 0.0, 0.0));
 		tModelToWorld = glm::rotate(tModelToWorld, rotAngle, glm::vec3(0.0, 1.0, 0.0));
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -199,7 +260,7 @@ int main() {
 		glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, nullptr);
 		glBindVertexArray(0);
 		glfwSwapBuffers(window);
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 
 	glDeleteBuffers(1, &ebo);
