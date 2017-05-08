@@ -189,8 +189,7 @@ int main() {
 	double lagTime = 0.0l;
 	double previousTs = glfwGetTime();
 	double prevCursorPosX = 0.0l, prevCursorPosY = 0.0l;
-	double cameraYaw = 0.0l, cameraPitch = 0.0l;
-	glfwGetCursorPos(window, &prevCursorPosX, &prevCursorPosY);
+	bool mouseLeftClicked = false;
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
@@ -212,18 +211,31 @@ int main() {
 		}
 
 		// handle camera looking
-		double currCursorPosX = 0.0l, currCursorPosY = 0.0l;
-		glfwGetCursorPos(window, &currCursorPosX, &currCursorPosY);
-		const double cursorOffsetX = (currCursorPosX - prevCursorPosX) * mouseSensitivity;
-		const double cursorOffsetY = (currCursorPosY - prevCursorPosY) * mouseSensitivity;
-		cameraYaw += cursorOffsetX;
-		cameraPitch += cursorOffsetY;
-		const double yawRad = glm::radians(cameraYaw);
-		const double pitchRad = glm::radians(cameraPitch);
-		cameraForward.x = cos(yawRad) * cos(pitchRad);
-		cameraForward.y = sin(pitchRad);
-		cameraForward.z = sin(yawRad) * cos(pitchRad);
-		cameraForward = glm::normalize(cameraForward);
+		if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS) {
+			if (!mouseLeftClicked) {
+				glfwGetCursorPos(window, &prevCursorPosX, &prevCursorPosY);
+				mouseLeftClicked = true;
+			} else {
+				double currCursorPosX = 0.0l, currCursorPosY = 0.0l;
+				glfwGetCursorPos(window, &currCursorPosX, &currCursorPosY);
+				const double cursorOffsetX = (currCursorPosX - prevCursorPosX) * mouseSensitivity;
+				const double cursorOffsetY = (currCursorPosY - prevCursorPosY) * mouseSensitivity;
+				const double yawAmount = glm::radians(cursorOffsetX);
+				const double pitchAmount = glm::radians(cursorOffsetY);
+				glm::dmat4 cameraRotation;
+				cameraRotation = glm::rotate(cameraRotation, yawAmount, glm::dvec3(0, 1, 0));
+				cameraRotation = glm::rotate(cameraRotation, pitchAmount, glm::dvec3(1, 0, 0));
+				cameraForward = glm::vec3((cameraRotation * glm::vec4(cameraForward, 1.0)));
+				// cameraForward.x = cos(yawRad) * cos(pitchRad);
+				// cameraForward.y = sin(pitchRad);
+				// cameraForward.z = sin(yawRad) * cos(pitchRad);
+				// cameraForward = glm::normalize(cameraForward);
+				prevCursorPosX = currCursorPosX;
+				prevCursorPosY = currCursorPosY;
+			}
+		} else {
+			mouseLeftClicked = false;
+		}
 
 		const double currentTs = glfwGetTime();
 		lagTime += currentTs - previousTs;
@@ -250,7 +262,7 @@ int main() {
 		// create model to world matrix
 		glm::mat4 tModelToWorld;
 		const float rotAngle = sin(currentTs);
-		tModelToWorld = glm::translate(tModelToWorld, glm::vec3(sin(currentTs), 0.0, 0.0));
+		//tModelToWorld = glm::translate(tModelToWorld, glm::vec3(sin(currentTs), 0.0, 0.0));
 		tModelToWorld = glm::rotate(tModelToWorld, rotAngle, glm::vec3(0.0, 1.0, 0.0));
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
